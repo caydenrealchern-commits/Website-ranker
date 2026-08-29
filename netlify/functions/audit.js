@@ -53,18 +53,25 @@ function callerKey(ip) {
  * and the limiter falls back to its two in-instance layers rather than
  * failing the request.
  */
+let storeError = null;
+
 async function openSharedStore() {
   try {
     const { getStore } = await import('@netlify/blobs');
     const blob = getStore({ name: 'rate-limit', consistency: 'strong' });
     // Prove it actually works before trusting it with the limit.
     await blob.get('__probe', { type: 'text' });
+    storeError = null;
     return {
       get: (key) => blob.get(key, { type: 'json' }),
       set: (key, value) => blob.setJSON(key, value),
       delete: (key) => blob.delete(key)
     };
-  } catch {
+  } catch (err) {
+    // Keep the reason. Swallowing it entirely is why this failure went
+    // unnoticed through two deploys - the fallback is silent by design, so
+    // something has to say why it happened.
+    storeError = String(err?.message || err).slice(0, 200);
     return null;
   }
 }
@@ -93,6 +100,7 @@ function ensureSharedStore() {
       limiter.useStore(store);
       log('store', {
         sharedRateLimit: Boolean(store),
+        storeError,
         saltConfigured: Boolean(process.env.RATE_SALT),
         unlockConfigured: Boolean(process.env.AUDIT_UNLOCK_KEY)
       });
@@ -225,6 +233,14 @@ export default async function handler(request, context) {
   try {
     const unlocked = isUnlocked(request.headers.get('x-audit-key') || payload?.key);
     const result = await auditUrl(payload?.url, { unlocked });
+
+    // Which commit is serving, and whether the cross-instance limiter is
+    // actually on. Neither is a secret: an attacker learns the limiter mode
+    // empirically in sixteen requests, so hiding it protects nothing while
+    // costing us the ability to verify a deploy from outside.
+    result.meta.build = (process.env.COMMIT_REF || '').slice(0, 7) || null;
+    result.meta.limiter = limiter.hasSharedStore ? 'shared' : 'instance';
+    if (storeError) result.meta.limiterError = storeError;
 
     log('audit', {
       score: result.score,
