@@ -18,21 +18,59 @@
  * Layer 3 needs a store. If none is available - locally, or from the CLI -
  * the limiter degrades to 1 and 2 and says so, rather than pretending.
  *
- * Layers 1 and 2 use a sliding window. Layer 3 uses a fixed window, because
- * a shared store has no atomic increment and fixed buckets keep the read and
- * the write to one key. The cost is that a burst straddling a boundary can
- * reach 2x the limit for a moment, which is an acceptable trade for a form
- * that a human presses.
+ * Layers 1 and 2 use a sliding window. Layer 3 uses a fixed window in one
+ * document per bucket, updated by compare-and-swap.
+ *
+ * An earlier version read the document, incremented, and wrote it back. That
+ * is a race, and not a theoretical one: measured against the live site, 16
+ * simultaneous requests on a cold fleet all read the same zero and all
+ * admitted themselves, against a limit of 8. The store does support
+ * conditional writes, so the write now only lands if the document has not
+ * changed since the read, and a losing writer retries against the new value.
  */
 
-/** In-process store. Also the fallback when no shared store is configured. */
+/**
+ * In-process store, and the stand-in for the real one in tests.
+ *
+ * Implements the same compare-and-swap contract as the Netlify Blobs
+ * adapter: `read` hands back an etag, and a write only lands if the etag
+ * still matches. That is what lets the tests reproduce a lost update.
+ */
 export class MemoryStore {
-  constructor() { this.map = new Map(); }
-  async get(key) { return this.map.get(key) ?? null; }
-  async set(key, value) { this.map.set(key, value); }
-  async delete(key) { this.map.delete(key); }
+  constructor() { this.map = new Map(); this.etags = new Map(); this.seq = 0; }
+
+  async read(key) {
+    const stored = this.map.get(key);
+    return {
+      // Deep copy, because the real store hands back freshly parsed JSON.
+      // Returning the live object would let a caller whose conditional write
+      // is about to FAIL still mutate the shared document - a corruption the
+      // network makes impossible, and which a test double must not invent.
+      value: stored === undefined ? null : structuredClone(stored),
+      etag: this.etags.get(key) ?? null
+    };
+  }
+
+  async writeIfMatch(key, value, etag) {
+    if ((this.etags.get(key) ?? null) !== etag) return false;
+    this.map.set(key, structuredClone(value));
+    this.etags.set(key, `v${++this.seq}`);
+    return true;
+  }
+
+  async writeIfNew(key, value) {
+    if (this.map.has(key)) return false;
+    this.map.set(key, structuredClone(value));
+    this.etags.set(key, `v${++this.seq}`);
+    return true;
+  }
+
+  async delete(key) { this.map.delete(key); this.etags.delete(key); }
   get size() { return this.map.size; }
 }
+
+/** Retries before a contended write gives up and refuses. */
+const CAS_ATTEMPTS = 6;
 
 export function createRateLimiter({
   requests,
@@ -90,19 +128,32 @@ export function createRateLimiter({
         const bucket = Math.floor(at / windowMs);
         const key = `w:${bucket}`;
         try {
-          const doc = (await shared.get(key)) || { total: 0, callers: {} };
-          const seen = doc.callers[ip] || 0;
+          // Compare-and-swap. A losing writer re-reads and tries again rather
+          // than clobbering the winner's count.
+          let verdict = null;
+          for (let attempt = 0; attempt < CAS_ATTEMPTS; attempt += 1) {
+            const { value, etag } = await shared.read(key);
+            const doc = value || { total: 0, callers: {} };
+            const seen = doc.callers[ip] || 0;
 
-          if (seen >= requests) return { ok: false, reason: 'ip-shared', retryAfter };
-          if (globalRequests && doc.total >= globalRequests) {
-            return { ok: false, reason: 'global', retryAfter };
+            if (seen >= requests) { verdict = 'ip-shared'; break; }
+            if (globalRequests && doc.total >= globalRequests) { verdict = 'global'; break; }
+
+            doc.total += 1;
+            // Bound the document. Past this many distinct callers in one
+            // window the site-wide ceiling is doing the work anyway.
+            if (seen || Object.keys(doc.callers).length < 5000) doc.callers[ip] = seen + 1;
+
+            const won = etag
+              ? await shared.writeIfMatch(key, doc, etag)
+              : await shared.writeIfNew(key, doc);
+            if (won) { verdict = 'ok'; break; }
           }
 
-          doc.total += 1;
-          // Bound the document. Past this many distinct callers in one window
-          // the site-wide ceiling is doing the work anyway.
-          if (seen || Object.keys(doc.callers).length < 5000) doc.callers[ip] = seen + 1;
-          await shared.set(key, doc);
+          // Exhausting the retries means heavy contention, which is itself a
+          // reason to refuse rather than wave the request through.
+          if (verdict === null) return { ok: false, reason: 'contended', retryAfter };
+          if (verdict !== 'ok') return { ok: false, reason: verdict, retryAfter };
 
           if (bucket !== lastBucket) {
             lastBucket = bucket;

@@ -396,6 +396,36 @@ ok('markup: keeps the actual words', textFromMarkup('<p>Call 0118 946 0958</p>')
 }
 
 {
+  // The race that got through in production: many instances reading the same
+  // counter at the same instant. Interleaved by hand here - every limiter
+  // reads before any of them writes - which is exactly what 16 cold lambdas
+  // did to the live site, letting all 16 past a limit of 8.
+  let clock = 4_800_000;
+  const store = new MemoryStore();
+  const opts = { requests: 3, windowMs: 1000, globalRequests: 100, store, now: () => clock };
+  const fleet = Array.from({ length: 8 }, () => createRateLimiter(opts));
+
+  const results = await Promise.all(fleet.map((l) => l.check('9.9.9.9')));
+  const admitted = results.filter((r) => r.ok).length;
+  eq('limit: a simultaneous burst cannot exceed the limit', admitted, 3);
+  ok('limit: the rest are refused, not silently admitted',
+    results.filter((r) => !r.ok).every((r) => ['ip-shared', 'contended'].includes(r.reason)),
+    JSON.stringify(results.filter((r) => !r.ok).map((r) => r.reason)));
+}
+
+{
+  // A losing writer must retry against the new value, not clobber it.
+  let clock = 4_900_000;
+  const store = new MemoryStore();
+  const a = createRateLimiter({ requests: 5, windowMs: 1000, store, now: () => clock });
+  const b = createRateLimiter({ requests: 5, windowMs: 1000, store, now: () => clock });
+  await Promise.all([a.check('1.2.3.4'), b.check('1.2.3.4')]);
+  const { value } = await store.read(`w:${Math.floor(clock / 1000)}`);
+  eq('limit: concurrent writes both counted, none lost', value.callers['1.2.3.4'], 2);
+  eq('limit: and the total agrees', value.total, 2);
+}
+
+{
   // A store outage must degrade, not fail the request.
   let clock = 5_000_000;
   const broken = { get: async () => { throw new Error('blobs down'); }, set: async () => { throw new Error('blobs down'); } };

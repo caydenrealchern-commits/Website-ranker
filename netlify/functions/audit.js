@@ -9,6 +9,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { auditUrl, errorResponse } from '../../src/audit.js';
 import { RATE_LIMIT } from '../../src/config.js';
 import { createRateLimiter } from '../../src/ratelimit.js';
+import { BUILD } from '../../src/build-info.js';
 
 /**
  * The unlock key for the locked sections.
@@ -63,8 +64,16 @@ async function openSharedStore() {
     await blob.get('__probe', { type: 'text' });
     storeError = null;
     return {
-      get: (key) => blob.get(key, { type: 'json' }),
-      set: (key, value) => blob.setJSON(key, value),
+      async read(key) {
+        const res = await blob.getWithMetadata(key, { type: 'json' });
+        return res ? { value: res.data, etag: res.etag ?? null } : { value: null, etag: null };
+      },
+      async writeIfMatch(key, value, etag) {
+        return (await blob.setJSON(key, value, { onlyIfMatch: etag })).modified;
+      },
+      async writeIfNew(key, value) {
+        return (await blob.setJSON(key, value, { onlyIfNew: true })).modified;
+      },
       delete: (key) => blob.delete(key)
     };
   } catch (err) {
@@ -238,7 +247,7 @@ export default async function handler(request, context) {
     // actually on. Neither is a secret: an attacker learns the limiter mode
     // empirically in sixteen requests, so hiding it protects nothing while
     // costing us the ability to verify a deploy from outside.
-    result.meta.build = (process.env.COMMIT_REF || '').slice(0, 7) || null;
+    result.meta.build = BUILD;
     result.meta.limiter = limiter.hasSharedStore ? 'shared' : 'instance';
     if (storeError) result.meta.limiterError = storeError;
 
