@@ -1,0 +1,21 @@
+{
+  "name": "lead-capture-audit",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Instant Lead Capture Audit - scores how well a website captures inbound leads",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "dev": "node dev-server.js",
+    "dev:netlify": "netlify dev",
+    "test": "node test/run-tests.js",
+    "audit": "node test/cli.js"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^11.0.2",
+    "cheerio": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

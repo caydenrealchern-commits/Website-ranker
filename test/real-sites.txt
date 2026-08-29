@@ -1,0 +1,17 @@
+# Section 8 test set - a spread of real sites, hand-verified against the pages.
+# Plain / small
+example.com
+motherfuckingwebsite.com
+# Well-built, chat + booking expected
+intercom.com
+calendly.com
+# Site builders that server-render
+wix.com
+squarespace.com
+webflow.com
+# Framework-heavy
+vercel.com
+react.dev
+# Genuine client-rendered shells - must withhold the score, not invent one
+excalidraw.com
+tldraw.com

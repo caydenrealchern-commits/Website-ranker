@@ -1,0 +1,1013 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f2f2f7">
+<title>Lead Capture Audit - how many enquiries is your site losing?</title>
+<meta name="description" content="Enter your website address and get a scored audit of how well it captures inbound leads. Fourteen checks, no sign-up.">
+
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="canonical" href="__SITE_URL__/">
+
+<!-- The plan is to post this on LinkedIn, where a link with no card gets a
+     fraction of the clicks. __SITE_URL__ is stamped at build time by
+     scripts/build.js, because og:image must be absolute - scrapers do not
+     resolve relative paths and do not run JavaScript. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Lead Capture Audit">
+<meta property="og:url" content="__SITE_URL__/">
+<meta property="og:title" content="How many enquiries is your website losing?">
+<meta property="og:description" content="Fourteen checks on one page. A score, the biggest leak, and what it costs you. No sign-up.">
+<meta property="og:image" content="__SITE_URL__/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Lead Capture Audit scorecard showing 63 out of 100.">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="How many enquiries is your website losing?">
+<meta name="twitter:description" content="Fourteen checks on one page. A score, the biggest leak, and what it costs you. No sign-up.">
+<meta name="twitter:image" content="__SITE_URL__/og.png">
+<style>
+/* ===========================================================================
+   Tokens. Apple's light system palette, plus a type scale where tracking is
+   size-specific - large text is tracked in, small text is left near zero.
+   Spacing is in rem so a larger text setting scales the layout with it.
+   =========================================================================== */
+:root {
+  /* Apple's palette, adjusted where it does not clear WCAG AA on the web.
+     systemBlue (#007aff) gives white text only 4.02:1; #0071e3 is the blue
+     Apple itself uses on the web, and clears 4.7:1 both as a button fill and
+     as text. The gray labels were 3.63:1 and 1.96:1 - readable on a calibrated
+     screen indoors, not readable on a phone in daylight, which is where this
+     audience reads. Hierarchy now comes from size and weight, as it should,
+     rather than from fading the text out. */
+  --blue:   #0071e3;
+  --blue-p: #005bb5;
+  --green:  #248a3d;          /* systemGreen darkened for text/marks on white */
+  --red:    #d70015;          /* systemRed darkened likewise */
+  --orange: #c25e00;          /* systemOrange is 2.1:1 on white; this is 4.3:1 */
+
+  --bg:            #f2f2f7;   /* systemGroupedBackground */
+  --surface:       #ffffff;
+  --surface-sunk:  #f2f2f7;
+  --label:         #1c1c1e;   /* 17.0:1 */
+  --label-2:       #6b6b73;   /* 5.3:1 on white, 4.8:1 on the page background */
+  --label-3:       #74747b;   /* 4.7:1 on white - only ever used on cards */
+  --separator:     rgba(60, 60, 67, 0.22);
+  --fill:          rgba(120, 120, 128, 0.12);
+  --chrome:        rgba(242, 242, 247, 0.72);
+
+  --r-card: 1rem;
+  --r-ctl:  0.75rem;
+  --r-pill: 999px;
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.04), 0 0 1px rgba(0, 0, 0, 0.06);
+
+  --gutter: 1.25rem;
+  --measure: 44rem;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--label);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+               system-ui, Roboto, Helvetica, Arial, sans-serif;
+  font-size: 1.0625rem;          /* 17px - iOS body */
+  line-height: 1.47;
+  letter-spacing: -0.011em;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-optical-sizing: auto;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* --- Translucent chrome. Content scrolls underneath a real material, and the
+       hairline only appears once something is actually behind it. ---------- */
+.chrome {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--chrome);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  padding: 0.6875rem var(--gutter) calc(0.6875rem + env(safe-area-inset-top));
+  padding-top: calc(0.6875rem + env(safe-area-inset-top));
+  display: flex; align-items: center; justify-content: center;
+  min-height: 2.75rem;
+}
+.chrome::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
+  background: var(--separator);
+  opacity: 0;
+  transition: opacity 220ms ease-out;
+}
+.chrome[data-scrolled="true"]::after { opacity: 1; }
+
+/* The compact title cross-fades in as the large title leaves - the iOS
+   navigation bar behaviour, which also tells you where you are once the
+   heading is gone. */
+.chrome .compact {
+  font-size: 1.0625rem; font-weight: 600; letter-spacing: -0.012em;
+  opacity: 0; transform: translateY(0.375rem);
+  transition: opacity 260ms ease-out, transform 260ms ease-out;
+}
+.chrome[data-scrolled="true"] .compact { opacity: 1; transform: none; }
+
+main { max-width: var(--measure); margin: 0 auto; padding: 2rem var(--gutter) 5rem; }
+
+/* --- Type ---------------------------------------------------------------- */
+h1 {
+  font-size: clamp(2.125rem, 6.2vw, 3.25rem);
+  line-height: 1.06;
+  letter-spacing: -0.024em;      /* tracked in, because it is large */
+  font-weight: 700;
+  margin: 0 0 0.625rem;
+  text-wrap: balance;
+}
+.lede {
+  font-size: 1.1875rem; line-height: 1.42; letter-spacing: -0.014em;
+  color: var(--label-2); margin: 0 0 2rem; max-width: 34rem;
+}
+h2 {
+  font-size: 1.375rem; line-height: 1.2; letter-spacing: -0.018em;
+  font-weight: 700; margin: 2.25rem 0 0.75rem;
+}
+.group-label {
+  font-size: 0.8125rem; line-height: 1.3; letter-spacing: 0.005em;
+  text-transform: uppercase; color: var(--label-2); font-weight: 600;
+  margin: 1.75rem 0 0.5rem; padding-inline: 1rem;
+}
+.footnote { font-size: 0.8125rem; line-height: 1.4; letter-spacing: 0; color: var(--label-2); }
+.subhead  { font-size: 0.9375rem; line-height: 1.4; letter-spacing: -0.006em; color: var(--label-2); }
+
+/* --- Controls ------------------------------------------------------------ */
+.field-row { display: flex; gap: 0.625rem; flex-wrap: wrap; }
+
+input[type="text"], input[type="email"] {
+  flex: 1 1 15rem; min-width: 0;
+  font: inherit; letter-spacing: inherit;
+  padding: 0.875rem 1rem;
+  color: var(--label);
+  background: var(--surface);
+  border: 1px solid transparent;
+  border-radius: var(--r-ctl);
+  box-shadow: var(--shadow-1);
+  transition: box-shadow 160ms ease-out, border-color 160ms ease-out;
+}
+input::placeholder { color: var(--label-3); }
+input:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3.5px rgba(0, 113, 227, 0.2);
+}
+
+button {
+  font: inherit; font-weight: 600; letter-spacing: -0.012em;
+  padding: 0.875rem 1.375rem;
+  border: 0; border-radius: var(--r-ctl);
+  background: var(--blue); color: #fff;
+  cursor: pointer;
+  touch-action: manipulation;           /* no 300ms tap delay */
+  -webkit-tap-highlight-color: transparent;
+  /* Press feedback is instant and lives on pointer-down, not on release. */
+  transition: transform 90ms ease-out, background-color 120ms ease-out, opacity 120ms ease-out;
+}
+button:hover { background: var(--blue-p); }
+button:active { transform: scale(0.965); background: var(--blue-p); }
+button:focus-visible { outline: 3px solid rgba(0, 113, 227, 0.45); outline-offset: 2px; }
+button[disabled] { opacity: 0.45; cursor: default; transform: none; }
+
+.cta {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  padding: 0.875rem 1.375rem;
+  border-radius: var(--r-pill);
+  background: var(--blue); color: #fff;
+  font-weight: 600; letter-spacing: -0.012em; text-decoration: none;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  transition: transform 90ms ease-out, background-color 120ms ease-out;
+}
+.cta:hover { background: var(--blue-p); }
+.cta:active { transform: scale(0.965); }
+.cta svg { flex: none; }
+
+.inline-error {
+  color: var(--red); font-size: 0.9375rem; letter-spacing: -0.006em;
+  margin: 0.625rem 0.25rem 0; min-height: 1.375rem;
+}
+
+/* --- Cards: the iOS inset-grouped list ----------------------------------- */
+.card {
+  background: var(--surface);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+}
+.card + .card { margin-top: 0.75rem; }
+.card-pad { padding: 1.25rem; }
+
+/* Hairlines inset to align with the text, not the card edge. */
+.row { display: flex; gap: 0.875rem; padding: 0.9375rem 1.25rem; position: relative; }
+.row + .row::before {
+  content: ""; position: absolute; top: 0; left: 3.5rem; right: 0; height: 1px;
+  background: var(--separator);
+}
+
+/* --- Progress ------------------------------------------------------------ */
+#progress { margin-top: 1.75rem; }
+.step {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.4375rem 0;
+  color: var(--label-3);
+  font-size: 0.9375rem; letter-spacing: -0.006em;
+}
+.step.active, .step.done { color: var(--label-2); }
+.step.done { color: var(--label); }
+.step .dot {
+  width: 1.25rem; height: 1.25rem; flex: none;
+  border-radius: 50%;
+  border: 2px solid var(--separator);
+  display: grid; place-items: center;
+}
+.step.active .dot {
+  border-color: var(--blue); border-top-color: transparent;
+  animation: spin 0.75s linear infinite;
+}
+.step.done .dot { border-color: var(--green); background: var(--green); }
+.step.done .dot::after {
+  content: ""; width: 0.375rem; height: 0.6875rem;
+  border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg) translate(-1px, -1px);
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* --- Score --------------------------------------------------------------- */
+.score-head { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
+.ring { width: 8.25rem; height: 8.25rem; flex: none; position: relative; }
+.ring svg { transform: rotate(-90deg); display: block; }
+.ring .readout { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+.ring .num {
+  font-size: 2.625rem; font-weight: 700; line-height: 1;
+  letter-spacing: -0.03em; font-variant-numeric: tabular-nums;
+}
+.ring .den { font-size: 0.75rem; letter-spacing: 0; color: var(--label-2); margin-top: 0.1875rem; }
+.band { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.022em; line-height: 1.15; margin: 0 0 0.25rem; }
+
+.callout {
+  margin-top: 1.25rem; padding: 0.875rem 1rem;
+  border-radius: var(--r-ctl);
+  background: var(--surface-sunk);
+  border-left: 3px solid var(--red);
+}
+.callout.warn { border-left-color: var(--orange); }
+.callout .title { font-weight: 600; letter-spacing: -0.012em; }
+
+/* --- Check marks --------------------------------------------------------- */
+.mark { width: 1.5rem; height: 1.5rem; flex: none; margin-top: 0.0625rem; }
+.check-label { font-weight: 600; letter-spacing: -0.012em; text-wrap: pretty; }
+/* The count and its unit are one token - never let "8" and "pts" split. */
+.check-label .pts { font-weight: 400; color: var(--label-3); font-size: 0.9375rem; white-space: nowrap; }
+.check-body { min-width: 0; }
+.check-msg { color: var(--label-2); }
+.check-ev { margin-top: 0.3125rem; color: var(--label-3); font-size: 0.8125rem; letter-spacing: 0; }
+
+/* --- Fix list ------------------------------------------------------------ */
+.fix-num {
+  width: 1.625rem; height: 1.625rem; flex: none; border-radius: 50%;
+  background: var(--fill); color: var(--label);
+  display: grid; place-items: center;
+  font-size: 0.8125rem; font-weight: 600; letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+.fix-what { font-weight: 600; letter-spacing: -0.012em; }
+.fix-how { color: var(--label-2); margin-top: 0.1875rem; }
+.fix-how code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875em; background: var(--fill); padding: 0.1em 0.35em; border-radius: 0.25rem;
+}
+
+.verified-list { margin: 0.75rem 0 0; padding: 0; list-style: none; }
+.verified-list li { display: flex; gap: 0.625rem; padding: 0.3125rem 0; color: var(--label-2); }
+
+/* --- The lock ------------------------------------------------------------
+   Real content, really blurred, so the volume of what is there is honest -
+   you can see how much is waiting rather than being told. The panel on top
+   is solid, not translucent: colour and text belong on a solid layer, never
+   on a translucent one stacked over another blurred surface. ------------- */
+.locked { position: relative; margin-top: 1.75rem; border-radius: var(--r-card); overflow: hidden; }
+.locked-content {
+  filter: blur(7px) saturate(0.72);
+  opacity: 0.9;
+  /* Tall enough that the panel never covers the whole blur - seeing how much
+     is behind it is the entire point of showing real content. */
+  min-height: 34rem;
+  max-height: 38rem;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  transform: scale(1.015);          /* hides the transparent bleed at the blur edge */
+  transform-origin: top center;
+}
+.locked-content > :first-child { margin-top: 0; }
+.locked::after {                     /* the content falls away into the page */
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 10rem;
+  background: linear-gradient(to bottom, rgba(242, 242, 247, 0), var(--bg));
+  pointer-events: none;
+}
+.lock-panel {
+  position: absolute; z-index: 2;
+  left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(30rem, calc(100% - 2rem));
+  background: var(--surface);
+  border-radius: var(--r-card);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.16), 0 2px 8px rgba(0, 0, 0, 0.06);
+  padding: 1.75rem 1.5rem;
+  text-align: center;
+}
+.lock-badge {
+  width: 2.75rem; height: 2.75rem; margin: 0 auto 0.875rem;
+  border-radius: 50%; background: var(--fill);
+  display: grid; place-items: center;
+}
+.lock-title {
+  font-size: 1.25rem; font-weight: 700; letter-spacing: -0.018em; line-height: 1.25;
+  margin-bottom: 0.4375rem; text-wrap: balance;
+}
+.lock-body { color: var(--label-2); margin-bottom: 1.125rem; text-wrap: pretty; }
+.lock-panel .cta { width: 100%; justify-content: center; }
+.lock-alt { margin-top: 0.75rem; }
+
+/* Placeholder bars stand in for copy the server did not send. They carry the
+   shape and the volume of what is missing, and nothing else - there is no
+   text here to un-blur. */
+.redact { height: 0.6875rem; border-radius: 0.34375rem; background: var(--fill); margin-top: 0.5rem; }
+.redact:first-child { margin-top: 0.375rem; }
+
+@media (prefers-reduced-transparency: reduce) {
+  /* A heavy blur is a transparency effect too. Keep the lock, drop the haze. */
+  .locked-content { filter: none; opacity: 0.12; }
+}
+@media (prefers-contrast: more) {
+  .locked-content { filter: blur(9px); opacity: 0.5; }
+  .lock-panel { border: 1px solid var(--separator); }
+}
+
+.stack { display: flex; flex-direction: column; gap: 0.875rem; align-items: flex-start; }
+.center { text-align: center; align-items: center; }
+.hidden { display: none !important; }
+footer { margin-top: 3rem; text-align: center; }
+footer p { margin: 0 0 0.5rem; max-width: 38rem; margin-inline: auto; }
+footer p:last-child { margin-bottom: 0; }
+
+/* --- Anything that animates in starts here and springs to rest ----------- */
+.enter { opacity: 0; }
+
+/* ===========================================================================
+   Accessibility preferences. Reduced motion is not "no feedback" - it is a
+   gentler, non-vestibular equivalent.
+   =========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+  button:active, .cta:active { transform: none; }
+  .step.active .dot { animation: none; border-color: var(--blue); border-top-color: var(--blue); }
+  .chrome .compact { transition: opacity 150ms linear; transform: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .chrome { background: var(--bg); backdrop-filter: none; -webkit-backdrop-filter: none; }
+}
+@media (prefers-contrast: more) {
+  :root {
+    --label-2: rgba(60, 60, 67, 0.85);
+    --label-3: rgba(60, 60, 67, 0.65);
+    --separator: rgba(60, 60, 67, 0.45);
+  }
+  .card { border: 1px solid var(--separator); }
+  .chrome { background: var(--bg); backdrop-filter: none; -webkit-backdrop-filter: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="chrome" id="chrome"><span class="compact">Lead Capture Audit</span></div>
+
+<main>
+  <h1 id="bigTitle">How many enquiries is your website losing?</h1>
+  <p class="lede">Enter your address. We read your home page the way a visitor does, and score how well it turns interest into contact.</p>
+
+  <form class="field-row" id="scanForm" novalidate>
+    <input type="text" id="url" placeholder="yourbusiness.co.uk" autocomplete="url"
+           autocapitalize="off" spellcheck="false" aria-label="Website address">
+    <button type="submit" id="scanBtn">Scan my site</button>
+  </form>
+  <div class="inline-error" id="inlineError" role="alert" aria-live="polite"></div>
+
+  <div id="progress" class="hidden" aria-live="polite"></div>
+  <div id="result" class="hidden"></div>
+
+  <!-- Every clause here has to stay true. No sign-up because the gate is a
+       booking, not an email. No record of the scan because nothing writes the
+       URL anywhere - not a database, not a log line.
+
+       The second line is what makes the URL in our user agent a real contact
+       route. The scanner points here instead of publishing an inbox, so a
+       webmaster who finds us in their log has to be able to land on this page
+       and get a straight answer. -->
+  <footer class="footnote">
+    <p>We read one page, once. No sign-up, no email, and we keep no record of what you scanned.</p>
+    <p>
+      Seen <strong>FlashbackLeadAudit</strong> in your server log? It requested your home page
+      a single time, because someone asked for an audit of it. It does not crawl, it obeys one
+      request per visitor, and it stored nothing.
+    </p>
+  </footer>
+</main>
+
+<script type="module">
+/* ===========================================================================
+   A spring, because a fixed-duration animation cannot respond to new input.
+   Re-targeting carries the current position AND velocity forward, so an
+   animation interrupted mid-flight continues from where it actually is on
+   screen instead of jumping to a logical value.
+   =========================================================================== */
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)');
+
+class Spring {
+  /** No spring here should ever take this long honestly. */
+  static MAX_MS = 2500;
+
+  /** damping 1.0 = critically damped (no overshoot). response = seconds to reach. */
+  constructor(value, { damping = 1, response = 0.4 } = {}) {
+    this.x = value; this.v = 0; this.target = value;
+    this.zeta = damping;
+    this.omega = (2 * Math.PI) / response;
+    this.listeners = [];
+    this.restListeners = [];
+    this.raf = null;
+    this.last = null;
+    this.deadline = null;
+  }
+  onUpdate(fn) { this.listeners.push(fn); return this; }
+  onRest(fn) { this.restListeners.push(fn); return this; }
+  /** Re-target without discontinuity: position and velocity both carry over. */
+  to(target) {
+    this.target = target;
+    if (REDUCED.matches) { this.finish(); return this; }
+    if (this.raf == null) { this.last = null; this.raf = requestAnimationFrame(this.tick); }
+
+    // requestAnimationFrame is suspended entirely in a background or occluded
+    // tab, which leaves a spring frozen part-way: content stuck at partial
+    // opacity, and - worse - the score counter stopped on a number that is
+    // not the score. Timers still fire when rAF does not, so this guarantees
+    // the value always arrives, watched or not.
+    clearTimeout(this.deadline);
+    this.deadline = setTimeout(() => this.finish(), Spring.MAX_MS);
+    return this;
+  }
+
+  /** Jump to the target and settle. Used by the deadline and reduced motion. */
+  finish() {
+    this.stop();
+    this.x = this.target;
+    this.v = 0;
+    this.emit();
+    this.rest();
+  }
+  set(value) { this.x = value; this.v = 0; this.target = value; this.emit(); return this; }
+  emit() { for (const fn of this.listeners) fn(this.x, this.v); }
+  rest() { for (const fn of this.restListeners) fn(); }
+  tick = (t) => {
+    if (this.last == null) this.last = t;
+    const dt = Math.min((t - this.last) / 1000, 1 / 30);   // clamp after a tab switch
+    this.last = t;
+
+    // Sub-stepped semi-implicit Euler keeps stiff springs stable.
+    const n = Math.max(1, Math.ceil(dt * 240));
+    const h = dt / n;
+    for (let i = 0; i < n; i += 1) {
+      const d = this.x - this.target;
+      const a = -this.omega * this.omega * d - 2 * this.zeta * this.omega * this.v;
+      this.v += a * h;
+      this.x += this.v * h;
+    }
+    this.emit();
+
+    const scale = Math.max(1, Math.abs(this.target));
+    if (Math.abs(this.x - this.target) < 0.0008 * scale && Math.abs(this.v) < 0.008 * scale) {
+      this.raf = null;
+      this.finish();
+      return;
+    }
+    this.raf = requestAnimationFrame(this.tick);
+  };
+  stop() {
+    if (this.raf != null) cancelAnimationFrame(this.raf);
+    this.raf = null;
+    clearTimeout(this.deadline);
+  }
+}
+
+/**
+ * Enter along one path so we can leave along the same one. Nothing here is
+ * gesture-driven, so every spring is critically damped - overshoot is earned
+ * by momentum the user supplied, and there is none to inherit.
+ */
+function springIn(node, { delay = 0, distance = 14 } = {}) {
+  node.classList.add('enter');
+  const run = () => {
+    if (REDUCED.matches) {
+      node.style.opacity = '';
+      node.classList.remove('enter');
+      node.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: 'linear' });
+      return;
+    }
+    const s = new Spring(0, { damping: 1, response: 0.42 });
+    node.style.willChange = 'transform, opacity';
+    s.onUpdate((p) => {
+      node.style.opacity = String(p);
+      node.style.transform = `translate3d(0, ${(1 - p) * distance}px, 0)`;
+    });
+    // Drop the compositor hint and the layer once it has settled. A
+    // will-change left behind pins the element to its own raster layer, and
+    // text on a stale layer renders visibly soft.
+    s.onRest(() => {
+      node.style.willChange = '';
+      node.style.transform = '';
+      node.style.opacity = '';
+      node.classList.remove('enter');
+    });
+    s.to(1);
+    node._springOut = () => {
+      const out = new Spring(1, { damping: 1, response: 0.28 });
+      out.onUpdate((p) => {
+        node.style.opacity = String(p);
+        node.style.transform = `translate3d(0, ${(1 - p) * distance}px, 0)`;
+      });
+      out.to(0);
+      return new Promise((r) => setTimeout(r, REDUCED.matches ? 0 : 200));
+    };
+  };
+  if (delay) setTimeout(run, delay); else run();
+  return node;
+}
+
+/* ------------------------------------------------------------------ helpers */
+const $ = (sel) => document.querySelector(sel);
+const el = (tag, cls, text) => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text != null) n.textContent = text;
+  return n;
+};
+const svg = (markup) => {
+  const span = document.createElement('span');
+  span.innerHTML = markup;
+  return span.firstElementChild;
+};
+
+const MARKS = {
+  pass: `<svg class="mark" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#248a3d"/><path d="M7.4 12.3l3.1 3.1 6.1-6.6" fill="none" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  fail: `<svg class="mark" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#d70015"/><path d="M8.6 8.6l6.8 6.8M15.4 8.6l-6.8 6.8" fill="none" stroke="#fff" stroke-width="2.1" stroke-linecap="round"/></svg>`,
+  unknown: `<svg class="mark" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#c25e00"/><path d="M9.5 9.4a2.6 2.6 0 1 1 3.2 2.5c-.5.15-.75.5-.75 1v.6" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16.6" r="1.15" fill="#fff"/></svg>`
+};
+const ARROW = `<svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9M8.5 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+/**
+ * A short pulse only at the moment a scan actually lands. Nowhere else.
+ *
+ * Guarded on user activation: browsers refuse to vibrate without a prior
+ * gesture and log an error for the attempt, which fills the console with
+ * noise that looks like a fault and is not one.
+ */
+const haptic = (pattern) => {
+  try {
+    if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;
+    navigator.vibrate?.(pattern);
+  } catch { /* unsupported, and not important enough to care */ }
+};
+
+/* ------------------------------------------------------- navigation chrome */
+const chrome = $('#chrome');
+new IntersectionObserver(
+  ([entry]) => chrome.dataset.scrolled = String(!entry.isIntersecting),
+  { rootMargin: '-8px 0px 0px 0px', threshold: 0 }
+).observe($('#bigTitle'));
+
+/* ----------------------------------------------------------------- progress */
+const STEPS = [
+  'Fetching the page',
+  'Reading what actually rendered',
+  'Checking how you can be contacted',
+  'Checking how enquiries are captured',
+  'Checking the conversion basics',
+  'Scoring'
+];
+
+function startProgress() {
+  const box = $('#progress');
+  box.innerHTML = '';
+  box.classList.remove('hidden');
+
+  const nodes = STEPS.map((label, i) => {
+    const row = el('div', 'step');
+    row.append(el('span', 'dot'), el('span', null, label));
+    box.append(row);
+    springIn(row, { delay: i * 45, distance: 10 });
+    return row;
+  });
+
+  let i = 0;
+  nodes[0].classList.add('active');
+  const timer = setInterval(() => {
+    if (i >= nodes.length - 1) return;
+    nodes[i].classList.replace('active', 'done');
+    i += 1;
+    nodes[i].classList.add('active');
+  }, 520);
+
+  return {
+    finish() {
+      clearInterval(timer);
+      nodes.forEach((n) => { n.classList.remove('active'); n.classList.add('done'); });
+    },
+    hide() { clearInterval(timer); box.classList.add('hidden'); }
+  };
+}
+
+/* ------------------------------------------------------------------- render */
+function ring(score) {
+  const r = 60, c = 2 * Math.PI * r;
+  const colour = score >= 80 ? 'var(--green)' : score >= 40 ? 'var(--orange)' : 'var(--red)';
+  const box = el('div', 'ring');
+  box.innerHTML = `
+    <svg width="132" height="132" viewBox="0 0 132 132" aria-hidden="true">
+      <circle cx="66" cy="66" r="${r}" fill="none" stroke="var(--fill)" stroke-width="9"/>
+      <circle class="arc" cx="66" cy="66" r="${r}" fill="none" stroke="${colour}" stroke-width="9"
+              stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c}"/>
+    </svg>
+    <div class="readout"><div class="num">0</div><div class="den">out of 100</div></div>`;
+
+  // The arc and the number are driven by one spring, so they can never drift
+  // apart, and an interrupted run resumes from the value on screen.
+  const arc = box.querySelector('.arc');
+  const num = box.querySelector('.num');
+  const s = new Spring(0, { damping: 1, response: 0.75 });
+  s.onUpdate((v) => {
+    arc.style.strokeDashoffset = String(c - (c * v) / 100);
+    num.textContent = String(Math.round(v));
+  });
+  requestAnimationFrame(() => s.to(score));
+  box._spring = s;
+  return box;
+}
+
+function ctaButton(cta, text) {
+  const a = el('a', 'cta');
+  a.href = cta.url;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  a.append(document.createTextNode(text || cta.text), svg(ARROW));
+  return a;
+}
+
+function checkRow(c) {
+  const row = el('div', 'row');
+  row.append(svg(MARKS[c.status]));
+
+  const body = el('div', 'check-body');
+  const head = el('div', 'check-label');
+  head.append(document.createTextNode(c.label + ' '), el('span', 'pts', `${c.points} pts`));
+  body.append(head, el('div', 'check-msg', c.message));
+  // The cost of each failure lives in its own section further down, which is
+  // one of the two behind the call. What is wrong stays visible here.
+  // Evidence only ever accompanies something we actually observed - a
+  // suppressed failure has none, by design (see src/score.js).
+  if (c.evidence && c.status !== 'unknown') {
+    body.append(el('div', 'check-ev', 'We saw: ' + c.evidence));
+  }
+
+  row.append(body);
+  return row;
+}
+
+/* ---------------------------------------------------------------- sections */
+/**
+ * Stand-in bars for copy the server withheld. The lock is server-side: the
+ * text these replace is not in the payload, so there is nothing here for
+ * devtools to reveal. They exist only to carry the right shape and volume.
+ */
+function redacted(lines) {
+  const box = el('div');
+  const widths = ['97%', '89%', '74%', '93%', '66%'];
+  for (let i = 0; i < lines; i += 1) {
+    const bar = el('div', 'redact');
+    bar.style.width = widths[i % widths.length];
+    box.append(bar);
+  }
+  return box;
+}
+
+/**
+ * Five sections. The first three name every issue on the site - what is
+ * wrong is never hidden. The last two are the analysis and the answers.
+ * Which of them arrive locked is config, not logic (src/config.js GATE).
+ */
+function buildSections(data) {
+  const groups = [...new Set(data.checks.map((c) => c.group))];
+  const failed = data.checks.filter((c) => c.status === 'fail');
+
+  const sections = groups.map((g) => {
+    const rows = data.checks.filter((c) => c.group === g);
+    return {
+      id: g,
+      label: rows[0].groupLabel,
+      count: rows.length,
+      build: () => {
+        const card = el('div', 'card');
+        rows.forEach((c) => card.append(checkRow(c)));
+        return card;
+      }
+    };
+  });
+
+  sections.push({
+    id: 'costs',
+    label: 'What these gaps are costing you',
+    count: failed.length,
+    noun: 'costed explanation',
+    build: () => {
+      const card = el('div', 'card');
+      for (const c of failed) {
+        const row = el('div', 'row');
+        row.append(svg(MARKS.fail));
+        const body = el('div', 'check-body');
+        body.append(el('div', 'check-label', c.label));
+        body.append(c.cost ? el('div', 'check-msg', c.cost) : redacted(3));
+        row.append(body);
+        card.append(row);
+      }
+      return card;
+    }
+  });
+
+  sections.push({
+    id: 'fixes',
+    label: 'Fix these, in this order',
+    count: data.fixList.length,
+    noun: 'fix instruction',
+    build: () => {
+      const card = el('div', 'card');
+      for (const f of data.fixList) {
+        const row = el('div', 'row');
+        row.append(el('div', 'fix-num', String(f.rank)));
+        const body = el('div');
+        body.append(el('div', 'fix-what', `${f.label} (${f.points} points)`));
+        if (f.fix) {
+          const how = el('div', 'fix-how');
+          how.textContent = f.fix;
+          body.append(how);
+        } else {
+          body.append(redacted(2));
+        }
+        row.append(body);
+        card.append(row);
+      }
+      return card;
+    }
+  });
+
+  return sections.filter((s) => s.count > 0);
+}
+
+function sectionNodes(section) {
+  return [el('div', 'group-label', section.label), section.build()];
+}
+
+const LOCK_GLYPH = `<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10.5V7.8a5 5 0 0 1 10 0v2.7" fill="none" stroke="#8e8e93" stroke-width="2" stroke-linecap="round"/><rect x="4.6" y="10.4" width="14.8" height="10.4" rx="3.2" fill="#8e8e93"/><circle cx="12" cy="15.6" r="1.5" fill="#fff"/></svg>`;
+
+/** Wraps a run of locked sections in one blurred region with a single panel. */
+function lockedRegion(sections, data) {
+  const wrap = el('div', 'locked');
+
+  const content = el('div', 'locked-content');
+  content.setAttribute('aria-hidden', 'true');
+  content.inert = true;                       // not focusable, not announced
+  for (const s of sections) content.append(...sectionNodes(s));
+  wrap.append(content);
+
+  const total = sections.reduce((n, s) => n + s.count, 0);
+  const what = sections
+    .map((s) => `${s.count} ${s.noun}${s.count === 1 ? '' : 's'}`)
+    .join(' and ');
+
+  const panel = el('div', 'lock-panel');
+  panel.append(svg(`<div class="lock-badge">${LOCK_GLYPH}</div>`));
+  const n = sections.length;
+  panel.append(el('div', 'lock-title',
+    n === 1 ? 'One more section is behind a call'
+            : `The last ${n} sections are behind a call`));
+  panel.append(el('div', 'lock-body',
+    `Every issue is listed above. What each one is costing you and how to fix it — ` +
+    `${what} — are in here.`));
+  panel.append(ctaButton(data.cta, 'Book a 30 minute call'));
+  panel.append(el('div', 'footnote lock-alt',
+    total === 1
+      ? 'We will walk you through it, or just fix it for you.'
+      : `We will walk you through all ${total}, or just fix the lot for you.`));
+
+  wrap.append(panel);
+  return wrap;
+}
+
+function renderReport(data, mount) {
+  const sections = buildSections(data);
+  const locked = new Set(data.gate.enabled ? (data.gate.lockedSections || []) : []);
+
+  let delay = 0;
+  let run = [];
+
+  const flushLocked = () => {
+    if (!run.length) return;
+    mount.append(springIn(lockedRegion(run, data), { delay }));
+    delay += 90;
+    run = [];
+  };
+
+  for (const section of sections) {
+    if (locked.has(section.id)) {
+      // Contiguous locked sections share one blur and one panel - two
+      // identical calls to action stacked on each other is just nagging.
+      run.push(section);
+      continue;
+    }
+    flushLocked();
+    const [label, card] = sectionNodes(section);
+    mount.append(springIn(label, { delay }));
+    mount.append(springIn(card, { delay: delay + 40 }));
+    delay += 90;
+  }
+  flushLocked();
+
+  if (!locked.size && data.fixList.length) {
+    const closing = el('div', 'card card-pad stack');
+    closing.append(
+      el('div', null, 'Want these fixed without doing it yourself?'),
+      ctaButton(data.cta)
+    );
+    mount.append(springIn(closing, { delay: delay + 40 }));
+  }
+}
+
+function renderManualReview(data, mount) {
+  const card = el('div', 'card card-pad stack');
+  card.append(el('div', 'band', 'We could not score this site honestly'));
+  card.append(el('p', 'subhead', data.confidence.reason));
+
+  const verified = data.checks.filter((c) => c.status === 'pass');
+  if (verified.length) {
+    card.append(el('div', null, 'What we could confirm:'));
+    const ul = el('ul', 'verified-list');
+    for (const c of verified) {
+      const li = el('li');
+      li.append(svg(MARKS.pass), el('span', null, `${c.label} — ${c.evidence || c.message}`));
+      ul.append(li);
+    }
+    card.append(ul);
+  }
+
+  const unknownCount = data.checks.filter((c) => c.status === 'unknown').length;
+  card.append(el('p', 'footnote',
+    `${unknownCount} further check${unknownCount === 1 ? '' : 's'} could not be verified from the page source. ` +
+    'We would rather tell you that than invent a score.'));
+
+  card.append(ctaButton(data.cta, 'Get a manual review on a 30 minute call'));
+  mount.append(springIn(card));
+}
+
+function renderResult(data) {
+  const mount = $('#result');
+  mount.innerHTML = '';
+  mount.classList.remove('hidden');
+
+  const head = el('div', 'card card-pad');
+  head.append(el('div', 'footnote', data.url.audited + (data.url.redirected ? '  (redirected)' : '')));
+
+  if (!data.scoreable) {
+    mount.append(springIn(head));
+    renderManualReview(data, mount);
+    return;
+  }
+
+  const row = el('div', 'score-head');
+  row.style.marginTop = '0.75rem';
+  const right = el('div');
+  right.append(el('div', 'band', data.band), el('div', 'subhead', data.bandMessage));
+  row.append(ring(data.score), right);
+  head.append(row);
+
+  if (data.worstFailure) {
+    const c = el('div', 'callout');
+    c.append(
+      el('div', 'title', 'Biggest leak: ' + data.worstFailure.label),
+      el('div', 'subhead', data.worstFailure.message + ' ' + data.worstFailure.cost)
+    );
+    head.append(c);
+  }
+
+  if (data.points.unverified > 0) {
+    // Name the checks that were skipped and why, from the checks themselves.
+    const unknowns = data.checks.filter((c) => c.status === 'unknown');
+    const n = el('div', 'callout warn');
+    n.append(el('div', 'footnote',
+      `Scored on the ${data.points.verifiable} points we could verify. ` +
+      `${data.points.unverified} points could not be checked: ` +
+      unknowns.map((c) => c.label).join(', ') + '.'));
+    for (const reason of [...new Set(unknowns.map((c) => c.message))]) {
+      n.append(el('div', 'footnote', reason));
+    }
+    head.append(n);
+  }
+
+  const actions = el('div');
+  actions.style.marginTop = '1.25rem';
+  actions.append(ctaButton(data.cta));
+  head.append(actions);
+
+  mount.append(springIn(head));
+  renderReport(data, mount);
+}
+
+function renderError(err) {
+  const mount = $('#result');
+  mount.innerHTML = '';
+  mount.classList.remove('hidden');
+  const card = el('div', 'card card-pad stack');
+  card.append(el('div', 'band', err.title), el('p', 'subhead', err.message));
+  if (err.manualReview && err.cta) card.append(ctaButton(err.cta, 'Get a manual review instead'));
+  mount.append(springIn(card));
+}
+
+/* ------------------------------------------------------------------ submit */
+let inFlight = false;
+
+$('#scanForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (inFlight) return;
+
+  const raw = $('#url').value.trim();
+  const errBox = $('#inlineError');
+
+  // Inline validation - no request leaves the browser for an obvious typo.
+  if (!raw) { errBox.textContent = 'Enter your website address.'; $('#url').focus(); return; }
+  if (/^(javascript|data|file|mailto|tel):/i.test(raw)) { errBox.textContent = 'That is not a website address.'; return; }
+  const host = raw.replace(/^https?:\/\//i, '').split(/[/?#]/)[0];
+  if (!host.includes('.') || /\s/.test(host)) { errBox.textContent = 'That does not look like a full domain name.'; return; }
+
+  errBox.textContent = '';
+  inFlight = true;
+  $('#scanBtn').disabled = true;
+  $('#scanBtn').textContent = 'Scanning…';
+
+  // An existing result leaves along the path it entered on before the next
+  // one arrives, rather than being cut away.
+  const mount = $('#result');
+  const previous = mount.firstElementChild;
+  if (previous?._springOut) await previous._springOut();
+  mount.classList.add('hidden');
+  mount.innerHTML = '';
+
+  const progress = startProgress();
+
+  try {
+    const res = await fetch('/.netlify/functions/audit', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url: raw })
+    });
+    const data = await res.json();
+
+    progress.finish();
+    await new Promise((r) => setTimeout(r, REDUCED.matches ? 0 : 320));
+    progress.hide();
+
+    if (data.ok) { haptic(8); renderResult(data); }
+    else if (data.error.code === 'invalid_url') { errBox.textContent = data.error.message; }
+    else { haptic([6, 40, 6]); renderError(data.error); }
+  } catch {
+    progress.hide();
+    renderError({
+      title: 'That scan did not finish',
+      message: 'Something went wrong on our side. Try again in a moment.',
+      manualReview: false
+    });
+  } finally {
+    inFlight = false;
+    $('#scanBtn').disabled = false;
+    $('#scanBtn').textContent = 'Scan my site';
+  }
+});
+</script>
+</body>
+</html>
