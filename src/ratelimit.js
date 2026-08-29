@@ -45,11 +45,22 @@ export function createRateLimiter({
   const perIp = new Map();      // caller -> timestamps, sliding
   let instance = [];            // all timestamps, sliding
   let lastBucket = null;        // for tidying the previous shared window
+  let shared = store;           // may arrive later - see useStore()
 
   const prune = (times, at) => times.filter((t) => at - t < windowMs);
 
   return {
-    hasSharedStore: Boolean(store),
+    get hasSharedStore() { return Boolean(shared); },
+
+    /**
+     * Attach the shared store after construction.
+     *
+     * Netlify injects the Blobs context per invocation, not at module load,
+     * so a store opened while the module is initialising is not configured
+     * and never works. The caller resolves it on the first request and hands
+     * it over here.
+     */
+    useStore(next) { shared = next || null; },
 
     async check(ip) {
       const at = now();
@@ -75,11 +86,11 @@ export function createRateLimiter({
       // store has no expiry - a slow leak that nobody notices until the
       // bill does. This way there is exactly one live key, and the previous
       // window's key is deleted as soon as the bucket rolls over.
-      if (store) {
+      if (shared) {
         const bucket = Math.floor(at / windowMs);
         const key = `w:${bucket}`;
         try {
-          const doc = (await store.get(key)) || { total: 0, callers: {} };
+          const doc = (await shared.get(key)) || { total: 0, callers: {} };
           const seen = doc.callers[ip] || 0;
 
           if (seen >= requests) return { ok: false, reason: 'ip-shared', retryAfter };
@@ -91,11 +102,11 @@ export function createRateLimiter({
           // Bound the document. Past this many distinct callers in one window
           // the site-wide ceiling is doing the work anyway.
           if (seen || Object.keys(doc.callers).length < 5000) doc.callers[ip] = seen + 1;
-          await store.set(key, doc);
+          await shared.set(key, doc);
 
           if (bucket !== lastBucket) {
             lastBucket = bucket;
-            Promise.resolve(store.delete?.(`w:${bucket - 1}`)).catch(() => {});
+            Promise.resolve(shared.delete?.(`w:${bucket - 1}`)).catch(() => {});
           }
         } catch {
           // A store outage must not take the tool down with it. Layers 1 and 2

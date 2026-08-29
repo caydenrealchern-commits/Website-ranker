@@ -346,6 +346,31 @@ ok('markup: keeps the actual words', textFromMarkup('<p>Call 0118 946 0958</p>')
 }
 
 {
+  // The store arrives AFTER construction in production, because Netlify only
+  // configures Blobs inside a request. A limiter built without one has to be
+  // able to take it later - getting this wrong meant every instance counted
+  // on its own, and 16 parallel requests against a limit of 8 let 15 through.
+  let clock = 4_200_000;
+  const store = new MemoryStore();
+  const late = createRateLimiter({ requests: 2, windowMs: 1000, store: null, now: () => clock });
+
+  eq('limit: starts with no shared store', late.hasSharedStore, false);
+  late.useStore(store);
+  eq('limit: takes a store handed over later', late.hasSharedStore, true);
+
+  // Two instances, both given the store late, must still share a count.
+  const other = createRateLimiter({ requests: 2, windowMs: 1000, store: null, now: () => clock });
+  other.useStore(store);
+  await late.check('6.6.6.6');
+  await late.check('6.6.6.6');
+  eq('limit: a late-attached store is still shared across instances',
+    (await other.check('6.6.6.6')).reason, 'ip-shared');
+
+  late.useStore(null);
+  eq('limit: and can be detached again', late.hasSharedStore, false);
+}
+
+{
   // The wallet guard: a site-wide ceiling regardless of how many IPs appear.
   let clock = 4_000_000;
   const store = new MemoryStore();

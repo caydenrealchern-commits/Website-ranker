@@ -69,15 +69,38 @@ async function openSharedStore() {
   }
 }
 
-const sharedStore = await openSharedStore();
-
 const limiter = createRateLimiter({
   requests: RATE_LIMIT.requests,
   windowMs: RATE_LIMIT.window_ms,
   instanceRequests: RATE_LIMIT.instance_requests,
-  globalRequests: RATE_LIMIT.global_requests,
-  store: sharedStore
+  globalRequests: RATE_LIMIT.global_requests
 });
+
+/**
+ * Opens the shared store once, on the first request rather than at module
+ * load, and hands it to the limiter.
+ *
+ * This ordering is the whole point. Netlify injects the Blobs context per
+ * invocation, so a store opened while the module is still initialising is
+ * unconfigured, throws, and leaves that instance falling back to per-instance
+ * counting for its entire life. Measured in production: 16 parallel requests
+ * against a limit of 8 let 15 through.
+ */
+let storeReady = null;
+function ensureSharedStore() {
+  if (!storeReady) {
+    storeReady = openSharedStore().then((store) => {
+      limiter.useStore(store);
+      log('store', {
+        sharedRateLimit: Boolean(store),
+        saltConfigured: Boolean(process.env.RATE_SALT),
+        unlockConfigured: Boolean(process.env.AUDIT_UNLOCK_KEY)
+      });
+      return store;
+    });
+  }
+  return storeReady;
+}
 
 /**
  * Structured logs, so Netlify's function log is a funnel you can actually
@@ -93,16 +116,6 @@ function log(evt, fields = {}) {
   if (fields.level === 'error') console.error(line);
   else console.log(line);
 }
-
-// Once per cold start. Without this there is no way to tell from the outside
-// whether the cross-instance limit is actually running or whether it quietly
-// fell back to per-instance counting.
-log('boot', {
-  sharedRateLimit: Boolean(sharedStore),
-  saltConfigured: Boolean(process.env.RATE_SALT),
-  unlockConfigured: Boolean(process.env.AUDIT_UNLOCK_KEY),
-  siteUrl: process.env.URL || process.env.SITE_URL || null
-});
 
 const LIMIT_COPY = {
   ip: `That is more than ${RATE_LIMIT.requests} scans in a minute. Give it a minute and try again.`,
@@ -177,6 +190,9 @@ export default async function handler(request, context) {
     (request.headers.get('x-forwarded-for') || '').split(',')[0].trim() ||
     context?.ip ||
     'unknown';
+
+  // Must happen inside the request: see ensureSharedStore().
+  await ensureSharedStore();
 
   const allowance = await limiter.check(callerKey(ip));
   if (!allowance.ok) {
